@@ -66,6 +66,27 @@ function Gobang(canvasDOM, rows, cols) {
 
 	this.rows = rows ? rows : 15;
 	this.cols = cols ? cols : 15;
+	function UUID(){
+        var s = [];
+        var hexDigits = "0123456789abcdef";
+        for (var i = 0; i < 36; i++) {
+            s[i] = hexDigits.substr(Math.floor(Math.random() * 0x10), 1);
+        }
+        s[14] = "4";  // bits 12-15 of the time_hi_and_version field to 0010
+        s[19] = hexDigits.substr((s[19] & 0x3) | 0x8, 1);  // bits 6-7 of the clock_seq_hi_and_reserved to 01
+        s[8] = s[13] = s[18] = s[23] = "-";
+        var uuid = s.join("");
+        return uuid;
+	}
+	
+	var drawNum;
+	
+//	drawNum = function() {
+//	    function S4() {
+//	       return (((1+Math.random())*0x10000)|0).toString(16).substring(1);
+//	    }
+//	    return (S4()+S4()+"-"+S4()+"-"+S4()+"-"+S4()+"-"+S4()+S4()+S4());
+//	}
 
 	this.currentPlayer = 0;
 	this.moves = [];
@@ -106,7 +127,7 @@ function Gobang(canvasDOM, rows, cols) {
 		this.draw();
 		this.currentPlayer = 1 - this.currentPlayer;
 		recordSteps(this.moves);
-		$.get("regret/");
+		$.get("regret/"+drawNum+"/");
 	}
 	//记录怎么走的到右边
 	function recordSteps (moves){
@@ -155,12 +176,13 @@ function Gobang(canvasDOM, rows, cols) {
 		document.getElementById("gobang-result").style.display = "none";
 		document.getElementById("gobang-welcome").style.display = "table";
 		document.getElementById("chooseColor").style.display = "none";
-		
+
+		drawNum = UUID();
 		var game = this;
 		var buttons = document.getElementsByClassName("gobang-start");
 		for ( var i = 0; i < buttons.length; i++)
 			buttons[i].onclick = function() {
-				$.get("reset/")
+				$.get("reset/"+drawNum+"/")
 				game.run();
 			}
 
@@ -243,7 +265,7 @@ function Gobang(canvasDOM, rows, cols) {
 				game.newMove(row, col);
 				if(game.moves.length==1){					
 					//初始化落子
-					$.get("/init/"+row+"/"+col);
+					$.get("/init/"+drawNum+"/"+row+"/"+col);
 					//如果走了1步， 开始选择哪一方是电脑
 					//原程序是走了5步选的
 					//选择哪一方
@@ -261,7 +283,7 @@ function Gobang(canvasDOM, rows, cols) {
 				$("#gobang-waiting").show();
 				var color = $(this).hasClass("white")?1:-1;
 				$.ajax({
-					url : "/start/"+color,
+					url : "/start/"+drawNum+"/"+color,
 					type : "post",
 					dataType : "json",
 					success : function(res) {
@@ -292,7 +314,7 @@ function Gobang(canvasDOM, rows, cols) {
 		function play(row, col) {
 			$("#gobang-waiting").show();
 			$.ajax({
-				url : "play/"+row+"/"+col,
+				url : "play/"+drawNum+"/"+row+"/"+col,
 				type : "post",
 				dataType : "json",
 				success : function(res) {

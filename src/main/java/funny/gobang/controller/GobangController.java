@@ -1,34 +1,30 @@
 package funny.gobang.controller;
 
-import funny.gobang.AppConstants;
-import funny.gobang.AppUtil;
-import funny.gobang.model.AiResponse;
-import funny.gobang.model.Point;
-import funny.gobang.service.AiService;
-import funny.gobang.service.BoardService;
+import static funny.gobang.AppConstants.BLACK;
+import static funny.gobang.AppConstants.BOARD_SIZE;
+import static funny.gobang.AppConstants.EMPTY;
+import static funny.gobang.AppConstants.WHITE;
+
+import java.util.concurrent.ConcurrentHashMap;
+
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Scope;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.context.WebApplicationContext;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import static funny.gobang.AppConstants.*;
+import funny.gobang.AppUtil;
+import funny.gobang.model.AiResponse;
+import funny.gobang.model.PlayerDetails;
+import funny.gobang.model.Point;
+import funny.gobang.service.AiService;
+import funny.gobang.service.BoardService;
 
 /**
  * Created by charlie on 2016/8/14.
  */
 @RestController
-@Scope(WebApplicationContext.SCOPE_SESSION)
 public class GobangController {
-	
-    private int[][] board = new int[BOARD_SIZE][BOARD_SIZE];
-    private List<Point> moves = new ArrayList<Point>(BOARD_SIZE * BOARD_SIZE);
-    private int aiStone;
-    private int playerStone;
+	private ConcurrentHashMap<String, PlayerDetails> playerDetails = new ConcurrentHashMap();
 
     @Autowired
     private AiService aiService;
@@ -36,36 +32,40 @@ public class GobangController {
     @Autowired
     private BoardService boardService;
 
-    @RequestMapping("/init/{row}/{col}")
-    public void init(@PathVariable int row, @PathVariable int col) {
+    @RequestMapping("/init/{drawNum}/{row}/{col}")
+    public void init(@PathVariable int row, @PathVariable int col, @PathVariable String drawNum ) {
     	int x = row;
     	int y = col;
-        board[x][y] = moves.size() % 2 == 0 ? BLACK : WHITE;
+    	PlayerDetails details = new PlayerDetails();
+        details.setBoard(x, y, details.getMoves().size() % 2 == 0 ? BLACK : WHITE);
         Point point = new Point(x, y);
-        moves.add(point);
+        details.addMoves(point);
+        playerDetails.put(drawNum, details);
     }
 
-    @RequestMapping("/start/{stone}")
-    public AiResponse start(@PathVariable int stone) {
-        aiStone = stone;
-        if(aiStone == BLACK){
-        	playerStone = WHITE;
+    @RequestMapping("/start/{drawNum}/{stone}")
+    public AiResponse start(@PathVariable int stone, @PathVariable String drawNum ) {
+    	PlayerDetails details = playerDetails.get(drawNum);
+    	//TODO need to check details here
+    	details.setAiStone(stone);
+        if(stone == BLACK){
+        	details.setPlayerStone(WHITE);
         }else{
-        	playerStone = BLACK;
+        	details.setPlayerStone(BLACK);
         }
-        boolean blackMove = moves.size() % 2 == 0;
-        if (aiStone == BLACK && blackMove || aiStone == WHITE && !blackMove) {
-            int[][] copyOfBoard = AppUtil.copyOf(board);
-            AiResponse aiResponse = aiService.play(copyOfBoard, aiStone);
-            board[aiResponse.getPoint().getX()][aiResponse.getPoint().getY()] = aiStone;
-            moves.add(aiResponse.getPoint());
+        boolean blackMove = details.getMoves().size() % 2 == 0;
+        if (stone == BLACK && blackMove || stone == WHITE && !blackMove) {
+            int[][] copyOfBoard = AppUtil.copyOf(details.getBoard());
+            AiResponse aiResponse = aiService.play(copyOfBoard, stone);
+            details.setBoard(aiResponse.getPoint().getX(), aiResponse.getPoint().getY(), stone);
+            details.addMoves(aiResponse.getPoint());
             return aiResponse;
         }
         return null;
     }
     
-    private boolean judge(int x, int y, Point point) {
-        boolean win = boardService.isWin(board, point, playerStone);
+    private boolean judgePlayerWin(int x, int y, Point point, int[][] board, int playerStone) {
+		boolean win = boardService.isWin(board, point, playerStone);
         AiResponse aiResponse = new AiResponse();
         if (win) {
         	return true;
@@ -73,47 +73,52 @@ public class GobangController {
         return false;
     }
 
-    @RequestMapping("/play/{row}/{col}")
-    public AiResponse play(@PathVariable int row, @PathVariable int col) {
+    @RequestMapping("/play/{drawNum}/{row}/{col}")
+    public AiResponse play(@PathVariable int row, @PathVariable int col, @PathVariable String drawNum ) {
     	//Player落子
     	int x = row;
     	int y = col;
-        board[x][y] = playerStone;
+    	PlayerDetails details = playerDetails.get(drawNum);
+    	details.setBoard(x, y, details.getPlayerStone());
         Point point = new Point(x, y);
-        moves.add(point);
-        if(judge(x,y, point)){
+        details.addMoves(point);
+        if(judgePlayerWin(x,y, point, details.getBoard(),details.getPlayerStone())){
         	AiResponse humenResponse = new AiResponse();
         	humenResponse.setPoint(point);
         	humenResponse.setWin(true);
-        	humenResponse.setStone(board[x][y]);
+        	humenResponse.setStone(details.getPlayerStone());
             return humenResponse;
         }else{
         	//人没赢, 看AI走
-        	int[][] copyOfBoard = AppUtil.copyOf(board);
-            AiResponse aiResponse = aiService.play(copyOfBoard, aiStone);
-            board[aiResponse.getPoint().getX()][aiResponse.getPoint().getY()] = aiStone;
-            moves.add(aiResponse.getPoint());
+        	int[][] copyOfBoard = AppUtil.copyOf(details.getBoard());
+            AiResponse aiResponse = aiService.play(copyOfBoard, details.getAiStone());
+            details.setBoard(aiResponse.getPoint().getX(), aiResponse.getPoint().getY(), details.getAiStone());
+            details.addMoves(aiResponse.getPoint());
             return aiResponse;
         }
     }
     
 
-    @RequestMapping("/regret")
-    public void regret() {
-        if (moves.size() > 0) {
-            Point p = moves.remove(moves.size() - 1);
-            board[p.getX()][p.getY()] = EMPTY;
+    @RequestMapping("/regret/{drawNum}")
+    public void regret(@PathVariable String drawNum) {
+    	PlayerDetails details = playerDetails.get(drawNum);
+        if (details.getMoves().size() > 0) {
+            Point p = details.getMoves().remove(details.getMoves().size() - 1);
+            details.setBoard(p.getX(), p.getY(), EMPTY);
         }
-        if (moves.size() > 0) {
-            Point p = moves.remove(moves.size() - 1);
-            board[p.getX()][p.getY()] = EMPTY;
+        if (details.getMoves().size() > 0) {
+            Point p = details.getMoves().remove(details.getMoves().size() - 1);
+            details.setBoard(p.getX(), p.getY(), EMPTY);
         }
     }
 
-    @RequestMapping("/reset")
-    public void reset() {
-        board = new int[BOARD_SIZE][BOARD_SIZE];
-        aiStone = 0;
-        moves.clear();
+    @RequestMapping("/reset/{drawNum}")
+    public void reset(@PathVariable String drawNum) {
+    	PlayerDetails details = playerDetails.get(drawNum);
+    	if(details==null) return;
+    	details.setBoard(new int[BOARD_SIZE][BOARD_SIZE]);
+    	details.setPlayerStone(0);
+    	details.setAiStone(0);
+    	details.getMoves().clear();
     }
 }
