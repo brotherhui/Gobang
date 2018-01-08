@@ -11,7 +11,7 @@ function Gobang(canvasDOM, rows, cols) {
 			var cellWidth = this.canvasWidth / (this.cols + 1);
 			var cellHeight = this.canvasHeight / (this.rows + 1);
 			for ( var i = 1; i <= this.cols; i++) {
-				this.canvas.fillText(i, cellWidth * i - 3, cellHeight*15 + 15);
+				this.canvas.fillText(i-1, cellWidth * i - 3, cellHeight*15 + 15);
 				this.canvas.moveTo(cellWidth * i, cellHeight);
 				this.canvas.lineTo(cellWidth * i, this.canvasHeight
 						- cellHeight);
@@ -58,6 +58,7 @@ function Gobang(canvasDOM, rows, cols) {
 		}
 	}
 
+	//初始化一些参数，行数， 列数
 	/* utils */
 	this.inBoard = function(row, col) {
 		return row >= 0 && col >= 0 && row < this.rows && col < this.cols;
@@ -68,19 +69,25 @@ function Gobang(canvasDOM, rows, cols) {
 
 	this.currentPlayer = 0;
 	this.moves = [];
-	var rowIndex = ["O","N","M","L","K","J","I","H","G","F","E","D","C","B","A"];
+	//var rowIndex = ["O","N","M","L","K","J","I","H","G","F","E","D","C","B","A"];
+	var rowIndex = ["0","1","2","3","4","5","6","7","8","9","10","11","12","13","14"];
 	this.grid = new Array(this.rows);
 	for ( var i = 0; i < this.rows; i++)
 		this.grid[i] = new Array(this.cols);
 
+	//是否使用AI
 	this.enableAI = true;
+	//默认的难度等级
 	this.hardness = 2;
+	//等待移动的步骤
 	this.newMove = function(row, col) {
+		//倒记时
 		countDown();
 		if (this.grid[row][col] != -1)
 			return;
 		this.grid[row][col] = this.currentPlayer;
 		this.moves.push([ row, col ]);
+		//记录怎么走的到右边
 		recordSteps(this.moves);
 		this.draw();
 
@@ -101,16 +108,18 @@ function Gobang(canvasDOM, rows, cols) {
 		recordSteps(this.moves);
 		$.get("regret/");
 	}
+	//记录怎么走的到右边
 	function recordSteps (moves){
 		var color = "";
 		var steps = "";
 		for(var i = 0; i < moves.length; i++){
 			color = (i%2==0)?"Black: " : "White: ";
-			steps +=(i+1)+":"+ color+rowIndex[moves[i][0]]+","+(moves[i][1]+1)+"\n";
+			steps +=(i+1)+":"+ color+" row-"+rowIndex[moves[i][0]]+", col-"+moves[i][1]+"\n";
 		}
 		$("#recordSteps").html(steps);
 	}
 
+	//倒记时
 	function countDown(){
         if(this.intervalId){
             clearInterval(this.intervalId);
@@ -206,6 +215,7 @@ function Gobang(canvasDOM, rows, cols) {
 		document.getElementById("chooseColor").style.display = "none";
 
 		var game = this;
+		//获取事件所点击的位置
 		function coordOnBoard(element, e) {
 			var ratioX = canvasDOM.width / canvasDOM.offsetWidth;
 			var ratioY = canvasDOM.height / canvasDOM.offsetHeight;
@@ -217,6 +227,7 @@ function Gobang(canvasDOM, rows, cols) {
 			};
 		}
 
+		//绑定click事件
 		this.hoverCanvasDOM.onclick = function(e) {
 			pos = coordOnBoard(this, e);
 			if (pos.x >= 0 && pos.y >= 0 && pos.x < game.cols
@@ -228,38 +239,44 @@ function Gobang(canvasDOM, rows, cols) {
 				//judge whether have a piece in this cell
 				if(judgeExist(row, col))
 					return ;
-				
+
 				game.newMove(row, col);
-				if(game.moves.length<=5){
+				if(game.moves.length==1){					
+					//初始化落子
 					$.get("/init/"+row+"/"+col);
+					//如果走了1步， 开始选择哪一方是电脑
+					//原程序是走了5步选的
+					//选择哪一方
+					choose();
 				}else{
 					play(row, col);
 				}
-				if(game.moves.length==5){
-					$("#chooseColor").show();
-					$("#chooseColor a").click(function(){
-						$("#chooseColor").hide();
-						$("#gobang-waiting").show();
-						var color = $(this).hasClass("white")?1:-1;
-						$.ajax({
-							url : "/start/"+color,
-							type : "post",
-							dataType : "json",
-							success : function(res) {
-								if(res!=null){
-									var row = res.point.x;
-									var col = res.point.y;
-									game.newMove(row, col);
-								}
-								$("#gobang-waiting").hide();
-							},
-							error : function() {
-								$("#gobang-waiting").hide();
-							}
-						});
-					});
-				}
 			}
+		}
+		
+		function choose(){
+			$("#chooseColor").show();
+			$("#chooseColor a").click(function(){
+				$("#chooseColor").hide();
+				$("#gobang-waiting").show();
+				var color = $(this).hasClass("white")?1:-1;
+				$.ajax({
+					url : "/start/"+color,
+					type : "post",
+					dataType : "json",
+					success : function(res) {
+						if(res!=null){
+							var row = res.point.x;
+							var col = res.point.y;
+							game.newMove(row, col);
+						}
+						$("#gobang-waiting").hide();
+					},
+					error : function() {
+						$("#gobang-waiting").hide();
+					}
+				});
+			});
 		}
 		
 		function judgeExist(row , col){
@@ -292,10 +309,13 @@ function Gobang(canvasDOM, rows, cols) {
 					$("#gobang-waiting").hide();
 				},
 				error : function() {
-					alert("Something Wrong");
+					alert("play Something Wrong");
 				}
 			});
 		}
+		
+
+		
 		var mouseOnBoard = false;
 		this.hoverCanvasDOM.addEventListener("mouseover", function(e) {
 			mouseOnBoard = true;
