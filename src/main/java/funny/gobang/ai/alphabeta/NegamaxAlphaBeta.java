@@ -30,8 +30,9 @@ public class NegamaxAlphaBeta implements GoBangAI {
     private static final Logger LOGGER = LoggerFactory.getLogger(NegamaxAlphaBeta.class);
 
     @Autowired
+    @Qualifier("AlphaBetaPrunningAI")
 //    @Qualifier("evaluationService")
-    @Qualifier("evaluateTuple")
+//    @Qualifier("evaluateTuple")
     private EvaluationService evaluationService;
 
     @Autowired
